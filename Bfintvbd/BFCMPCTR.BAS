@@ -9,6 +9,7 @@ DIM InFileH AS INTEGER
 DIM InPath AS STRING
 DIM OutFileH AS INTEGER
 DIM OutPath AS STRING
+DIM Position AS INTEGER
 
 PRINT "Brainf*ck Compacter v1.01 - by: Peter Swinkels, ***2023***"
 
@@ -16,9 +17,7 @@ LINE INPUT "Input file: "; InPath
 IF NOT InPath = "" THEN LINE INPUT "Output file: "; OutPath
 
 IF NOT (InPath = "" OR OutPath = "") THEN
-InFileH = FREEFILE
- OPEN InPath FOR INPUT LOCK READ WRITE AS InFileH
- CLOSE InFileH
+ IF DIR$(InPath) = "" THEN ERROR 53
 
  BufferSize = 32000
  InFileH = FREEFILE
