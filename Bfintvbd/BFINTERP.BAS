@@ -1,15 +1,20 @@
-OPTION EXPLICIT
+'''OPTION EXPLICIT
 DEFINT A-Z
 CONST MEMORY_SIZE = &H7FFF
 
+TYPE LoopStr
+ LoopEnd AS INTEGER
+ LoopStart AS INTEGER
+END TYPE
+
 DECLARE FUNCTION Escape (Text AS STRING) AS STRING
-DECLARE FUNCTION GetLoopList (Code AS STRING) AS STRING
 DECLARE FUNCTION LoadCode (Path AS STRING) AS STRING
-DECLARE FUNCTION Loops (LoopList AS STRING, InstructionP AS INTEGER, Backwards AS INTEGER) AS INTEGER
+DECLARE FUNCTION Loops (LoopList() AS LoopStr, InstructionP AS INTEGER, Backwards AS INTEGER) AS INTEGER
 DECLARE FUNCTION NextArgument (Arguments AS STRING) AS INTEGER
 DECLARE FUNCTION PopArgument (Arguments AS STRING, Argument AS STRING) AS STRING
 DECLARE FUNCTION Unescape (Text AS STRING) AS STRING
 DECLARE SUB Execute (Code AS STRING, InputLineBreak AS STRING, OutputLineBreak AS STRING)
+DECLARE SUB GetLoopList (Code AS STRING, LoopList() AS LoopStr)
 DECLARE SUB Main ()
 
 CALL Main
@@ -43,14 +48,14 @@ SUB Execute (Code AS STRING, InputLineBreak AS STRING, OutputLineBreak AS STRING
 DIM Character AS STRING * 1
 DIM InputBuffer AS STRING
 DIM InstructionP AS INTEGER
-DIM LoopList AS STRING
+DIM LoopList(0 TO 0) AS LoopStr
 DIM Memory AS STRING
 DIM MemoryP AS INTEGER
 DIM OutputBuffer AS STRING
 DIM UserInput AS STRING
 
  InstructionP = &H0
- LoopList = GetLoopList(Code)
+ GetLoopList Code, LoopList()
  Memory = STRING$(MEMORY_SIZE, &H0)
  MemoryP = &H0
 
@@ -100,11 +105,11 @@ DIM UserInput AS STRING
     END IF
    CASE "["
     IF ASC(MID$(Memory, MemoryP + &H1, &H1)) = &H0 THEN
-     InstructionP = Loops(LoopList, InstructionP, 0)
+     InstructionP = Loops(LoopList(), InstructionP, 0)
     END IF
    CASE "]"
     IF NOT ASC(MID$(Memory, MemoryP + &H1, &H1)) = &H0 THEN
-     InstructionP = Loops(LoopList, InstructionP, -1)
+     InstructionP = Loops(LoopList(), InstructionP, -1)
     END IF
   END SELECT
 
@@ -112,38 +117,44 @@ DIM UserInput AS STRING
  LOOP WHILE InstructionP > &H0 AND InstructionP < LEN(Code)
 END SUB
 
-FUNCTION GetLoopList (Code AS STRING) AS STRING
+SUB GetLoopList (Code AS STRING, LoopList() AS LoopStr)
 DIM Character AS STRING * 1
-DIM LoopList AS STRING
-DIM LoopStack AS STRING
+DIM LoopCount AS INTEGER
+DIM LoopStack(0 TO 0) AS INTEGER
+DIM LoopStackSize AS INTEGER
 DIM Position AS INTEGER
 DIM StartOfLoop AS INTEGER
 
- LoopList = ""
- LoopStack = ""
+ LoopCount = 0
+ LoopStackSize = 0
  FOR Position = 1 TO LEN(Code)
   Character = MID$(Code, Position, 1)
   SELECT CASE Character
    CASE "["
-    LoopStack = LoopStack + MKI$(Position - 1)
+    REDIM PRESERVE LoopStack(LBOUND(LoopStack) TO LoopStackSize) AS INTEGER
+    LoopStack(UBOUND(LoopStack)) = Position - 1
+    LoopStackSize = LoopStackSize + 1
    CASE "]"
-    IF LoopStack = "" THEN
+    IF LoopStackSize = 0 THEN
      PRINT "End of loop without start."
      EXIT FOR
     ELSE
-     StartOfLoop = CVI(MID$(LoopStack, LEN(LoopStack) - 1, 2))
-     LoopStack = LEFT$(LoopStack, LEN(LoopStack) - 2)
-     LoopList = LoopList + MKI$(StartOfLoop) + MKI$(Position - 1)
+     StartOfLoop = LoopStack(UBOUND(LoopStack))
+     LoopStackSize = LoopStackSize - 1
+     REDIM PRESERVE LoopStack(LBOUND(LoopStack) TO LoopStackSize) AS INTEGER
+     LoopCount = LoopCount + 1
+     REDIM PRESERVE LoopList(LBOUND(LoopList) TO LoopCount) AS LoopStr
+     LoopList(UBOUND(LoopList)).LoopStart = StartOfLoop
+     LoopList(UBOUND(LoopList)).LoopEnd = Position - 1
     END IF
   END SELECT
  NEXT Position
 
- IF NOT LoopStack = "" THEN
+ IF NOT LoopStackSize = 0 THEN
   PRINT "Loop without end."
  END IF
 
- GetLoopList = LoopList
-END FUNCTION
+END SUB
 
 FUNCTION LoadCode (Path AS STRING) AS STRING
 DIM Code AS STRING
@@ -159,20 +170,20 @@ DIM FileH AS INTEGER
  LoadCode = Code
 END FUNCTION
 
-FUNCTION Loops (LoopList AS STRING, InstructionP AS INTEGER, Backwards AS INTEGER) AS INTEGER
+FUNCTION Loops (LoopList() AS LoopStr, InstructionP AS INTEGER, Backwards AS INTEGER) AS INTEGER
 DIM NewInstructionP AS INTEGER
 DIM Position AS INTEGER
 
- FOR Position = 1 TO LEN(LoopList) STEP 4
+ FOR Position = LBOUND(LoopList) TO UBOUND(LoopList)
   SELECT CASE Backwards
    CASE 0
-    IF InstructionP = CVI(MID$(LoopList, Position, 2)) THEN
-     NewInstructionP = CVI(MID$(LoopList, Position + 2, 2))
+    IF InstructionP = LoopList(Position).LoopStart THEN
+     NewInstructionP = LoopList(Position).LoopEnd
      EXIT FOR
     END IF
    CASE -1
-    IF InstructionP = CVI(MID$(LoopList, Position + 2, 2)) THEN
-     NewInstructionP = CVI(MID$(LoopList, Position, 2))
+    IF InstructionP = LoopList(Position).LoopEnd THEN
+     NewInstructionP = LoopList(Position).LoopStart
      EXIT FOR
     END IF
   END SELECT
